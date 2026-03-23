@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>latency-lens Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+        h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; }
+        .subtitle { color: #94a3b8; margin-bottom: 1.5rem; }
+        .grid { display: grid; gap: 1rem; }
+        .grid-4 { grid-template-columns: repeat(4, 1fr); }
+        .grid-2 { grid-template-columns: repeat(2, 1fr); }
+        .card { background: #1e293b; border-radius: 8px; padding: 1.25rem; border: 1px solid #334155; }
+        .stat-value { font-size: 2rem; font-weight: 700; color: #f8fafc; }
+        .stat-label { font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+        h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 0.5rem 0.75rem; font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; border-bottom: 1px solid #334155; }
+        td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #1e293b; font-size: 0.85rem; }
+        tr:hover td { background: #334155; }
+        .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+        .badge-red { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+        .badge-yellow { background: rgba(234, 179, 8, 0.2); color: #fbbf24; }
+        .badge-green { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+        .badge-blue { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        .pattern-item { padding: 0.75rem; border-left: 3px solid #f87171; margin-bottom: 0.75rem; background: rgba(239, 68, 68, 0.05); border-radius: 0 4px 4px 0; }
+        .pattern-item.medium { border-left-color: #fbbf24; background: rgba(234, 179, 8, 0.05); }
+        .pattern-type { font-weight: 600; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 0.25rem; }
+        .pattern-desc { font-size: 0.85rem; color: #cbd5e1; }
+        .chart-container { position: relative; height: 250px; }
+        .controls { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        .controls button { padding: 0.35rem 0.75rem; border-radius: 4px; border: 1px solid #475569; background: transparent; color: #e2e8f0; cursor: pointer; font-size: 0.8rem; }
+        .controls button.active { background: #3b82f6; border-color: #3b82f6; }
+        .controls button:hover { background: #334155; }
+        .empty { color: #64748b; text-align: center; padding: 2rem; }
+        @media (max-width: 768px) {
+            .grid-4 { grid-template-columns: repeat(2, 1fr); }
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>latency-lens</h1>
+        <p class="subtitle">Performance Dashboard</p>
+
+        <div class="controls">
+            <button class="active" onclick="loadData(1)">1h</button>
+            <button onclick="loadData(6)">6h</button>
+            <button onclick="loadData(24)">24h</button>
+            <button onclick="loadData(72)">3d</button>
+            <button onclick="loadData(168)">7d</button>
+        </div>
+
+        <!-- Summary Stats -->
+        <div class="grid grid-4" style="margin-bottom:1rem">
+            <div class="card">
+                <div class="stat-value" id="totalRequests">-</div>
+                <div class="stat-label">Total Requests</div>
+            </div>
+            <div class="card">
+                <div class="stat-value" id="uniqueEndpoints">-</div>
+                <div class="stat-label">Endpoints</div>
+            </div>
+            <div class="card">
+                <div class="stat-value" id="errorRate">-</div>
+                <div class="stat-label">Error Rate</div>
+            </div>
+            <div class="card">
+                <div class="stat-value" id="issueCount">-</div>
+                <div class="stat-label">Issues Detected</div>
+            </div>
+        </div>
+
+        <div class="grid grid-2">
+            <!-- Latency Chart -->
+            <div class="card">
+                <h2>Latency Distribution (P50 / P95 / P99)</h2>
+                <div class="chart-container">
+                    <canvas id="latencyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Request Volume -->
+            <div class="card">
+                <h2>Request Volume</h2>
+                <div class="chart-container">
+                    <canvas id="volumeChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Endpoint Table -->
+        <div class="card" style="margin-top:1rem">
+            <h2>Endpoint Performance</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Endpoint</th>
+                        <th>Requests</th>
+                        <th>P50</th>
+                        <th>P95</th>
+                        <th>P99</th>
+                        <th>Error Rate</th>
+                        <th>Avg Response</th>
+                    </tr>
+                </thead>
+                <tbody id="endpointTable">
+                    <tr><td colspan="7" class="empty">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Detected Patterns -->
+        <div class="card" style="margin-top:1rem">
+            <h2>Detected Issues</h2>
+            <div id="patterns">
+                <div class="empty">Analyzing...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let latencyChart, volumeChart;
+
+        async function loadData(hours) {
+            // Update active button
+            document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active'));
+            event?.target?.classList?.add('active');
+
+            const resp = await fetch(`/api/analysis?hours=${hours}`);
+            const data = await resp.json();
+
+            // Summary stats
+            document.getElementById('totalRequests').textContent = data.summary.total_requests.toLocaleString();
+            document.getElementById('uniqueEndpoints').textContent = data.summary.unique_endpoints;
+            document.getElementById('errorRate').textContent = (data.summary.error_rate * 100).toFixed(1) + '%';
+            document.getElementById('issueCount').textContent = data.patterns.length;
+
+            // Endpoint table
+            const tbody = document.getElementById('endpointTable');
+            if (data.endpoints.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty">No data yet. Make some requests to your API.</td></tr>';
+            } else {
+                tbody.innerHTML = data.endpoints.map(ep => `
+                    <tr>
+                        <td><strong>${ep.endpoint}</strong></td>
+                        <td>${ep.count}</td>
+                        <td>${ep.p50?.toFixed(0) || '-'}ms</td>
+                        <td>${ep.p95?.toFixed(0) || '-'}ms</td>
+                        <td>${ep.p99?.toFixed(0) || '-'}ms</td>
+                        <td><span class="badge ${ep.error_rate > 0.05 ? 'badge-red' : ep.error_rate > 0 ? 'badge-yellow' : 'badge-green'}">${(ep.error_rate * 100).toFixed(1)}%</span></td>
+                        <td>${formatBytes(ep.avg_response_size || 0)}</td>
+                    </tr>
+                `).join('');
+            }
+
+            // Patterns
+            const patternsDiv = document.getElementById('patterns');
+            if (data.patterns.length === 0) {
+                patternsDiv.innerHTML = '<div class="empty">No issues detected. Looking good!</div>';
+            } else {
+                patternsDiv.innerHTML = data.patterns.map(p => `
+                    <div class="pattern-item ${p.severity === 'medium' ? 'medium' : ''}">
+                        <div class="pattern-type">${p.type}</div>
+                        <div class="pattern-desc">${p.description}</div>
+                    </div>
+                `).join('');
+            }
+
+            // Charts
+            updateCharts(data.endpoints);
+        }
+
+        function updateCharts(endpoints) {
+            const labels = endpoints.slice(0, 10).map(e => e.endpoint.length > 25 ? e.endpoint.slice(0, 25) + '...' : e.endpoint);
+            const p50 = endpoints.slice(0, 10).map(e => e.p50 || 0);
+            const p95 = endpoints.slice(0, 10).map(e => e.p95 || 0);
+            const p99 = endpoints.slice(0, 10).map(e => e.p99 || 0);
+            const counts = endpoints.slice(0, 10).map(e => e.count || 0);
+
+            if (latencyChart) latencyChart.destroy();
+            if (volumeChart) volumeChart.destroy();
+
+            const ctx1 = document.getElementById('latencyChart').getContext('2d');
+            latencyChart = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'P50', data: p50, backgroundColor: '#22c55e' },
+                        { label: 'P95', data: p95, backgroundColor: '#eab308' },
+                        { label: 'P99', data: p99, backgroundColor: '#ef4444' },
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#94a3b8' } } },
+                    scales: {
+                        x: { ticks: { color: '#64748b', maxRotation: 45 } },
+                        y: { ticks: { color: '#64748b' }, title: { display: true, text: 'ms', color: '#64748b' } }
+                    }
+                }
+            });
+
+            const ctx2 = document.getElementById('volumeChart').getContext('2d');
+            volumeChart = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{ label: 'Requests', data: counts, backgroundColor: '#3b82f6' }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#94a3b8' } } },
+                    scales: {
+                        x: { ticks: { color: '#64748b', maxRotation: 45 } },
+                        y: { ticks: { color: '#64748b' } }
+                    }
+                }
+            });
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        // Initial load
+        loadData(24);
+    </script>
+</body>
+</html>
