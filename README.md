@@ -1,5 +1,8 @@
 # latency-lens
 
+[![Built with Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-blue?logo=anthropic&logoColor=white)](https://claude.ai/code)
+
+
 **Auto-instrument your API and get a performance dashboard with AI-powered optimization suggestions.** Add one line of middleware. See every endpoint's P50/P95/P99. Get told exactly what to fix.
 
 ```python
